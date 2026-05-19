@@ -73,7 +73,7 @@ Every workflow you create or modify lives on disk before it lives on the server.
 ## Update flow
 1. `mcp__ai_builder__workflow_read` for the current remote state.
 2. If the local file is missing, `Write` it from the remote response and write the sidecar with `lastDeployedHash` matching the just-written file. (This is the "first-time-clone" path.)
-3. **Drift check**: hash the freshly read remote and compare against the sidecar's `lastDeployedHash`. If they differ, the remote was edited out-of-band (canvas, another developer). Stop, surface the drift to the user as a markdown summary, and ask which side wins before doing anything destructive.
+3. **Drift check**: hash the freshly read remote and compare against the sidecar's `lastDeployedHash`. If they differ, the remote was edited out-of-band (canvas, another developer). Compare the local and remote bodies side by side — if the **only** differences are inside `studioData.nodes[i].position` or `studioData.nodes[i].measured` (the user dragged nodes around in the canvas), this is **position-only drift**: silently update the local file's `studioData` from the remote and re-hash, no prompt. Any other body difference (node parameters, deps, names, descriptions, edges semantics, agentConfig, tags, …) is real drift — stop, surface it to the user as a markdown summary, and ask which side wins before doing anything destructive.
 4. `Edit` the local file with the change.
 5. Call `mcp__ai_builder__workflow_update` with the file's contents.
 6. On success, update the sidecar (`lastDeployedAt`, new `lastDeployedHash`).
@@ -82,6 +82,94 @@ Every workflow you create or modify lives on disk before it lives on the server.
 - The user can `git diff` and review the workflow JSON before it ships.
 - The local file survives session compaction, the chat reply doesn't.
 - The `PreToolUse` hook will block `workflow_create` / `workflow_update` calls that don't have a matching local file. Don't try to bypass it — Write the file first.
+
+---
+
+# NODE LAYOUT (canvas positions)
+
+Every workflow you deploy MUST include `workflowJson.studioData.nodes[]` with explicit `position: { x, y }` for every node. The server's fallback positioner places nodes by *array-iteration index* instead of by execution order — fine for an LLM agent reading the JSON, ugly for a human opening the workflow on the canvas. Owning positions in the playbook is the fix.
+
+## The two rules
+
+1. **New nodes** — lay out in topological order, single column, top→bottom, with extra gap around fan-in / fan-out.
+2. **Existing nodes** — never overwrite the canvas position. If the user dragged a node, that position wins forever (until they drag it again).
+
+## Coordinates
+
+```
+x = 400                          // single column, matches the legacy default
+y0 = -96                         // first node's y
+BASE_SPACING = 200               // gap between consecutive nodes
+FAN_EXTRA = 80                   // extra gap before/after fan-in or fan-out node
+SNAP = 16                        // canvas snaps to this grid; pre-snap to avoid jumps
+```
+
+Round every final `y` with `Math.round(y / 16) * 16`.
+
+## Algorithm
+
+1. **Build the dep graph** from `{{nodeId.field}}` references inside every node's parameters. Edge: `source = referenced nodeId`, `target = current nodeId`. (Same logic the server already uses to materialise edges — you don't ship the edge list, just the positions.)
+2. **Topological sort** by deps. Tie-break by ascending `nodeId` for stability across runs.
+3. **Compute in-degree / out-degree** per node from the same dep graph.
+4. **Load existing positions** into a `Map<nodeId, {x,y}>`:
+   - On `workflow_update`: read the local `<slug>.json`'s `studioData.nodes[]` (the workflow-as-code source of truth — drift check already brought it in sync with remote, including any user repositioning).
+   - On `workflow_create`: map is empty.
+5. **Walk the topo order.** For each `nodeId`:
+   - If it's in the existing map → carry that `{x,y}` through verbatim, and update the running `cursorY = max(cursorY, existingY)` so new nodes appended below don't collide.
+   - Else → compute its `y`:
+     - `cursorY += BASE_SPACING`
+     - if `in-degree ≥ 2` → `cursorY += FAN_EXTRA` once
+     - assign `y = round-to-16(cursorY)`, `x = 400`
+     - if `out-degree ≥ 2` → `cursorY += FAN_EXTRA` once for the *next* node to receive extra room above it
+6. **Initialise `cursorY`** before step 5 to either `max(existing y) − BASE_SPACING` (so the first append lands at `max + BASE_SPACING`) or `y0 − BASE_SPACING = -296` if there are no existing positions.
+7. **Build `studioData.nodes[]`** — one entry per node:
+   ```json
+   { "id": "<nodeId-as-string>", "type": "mainNodeType", "position": { "x": 400, "y": <computed> } }
+   ```
+   The server fills in `data`, `measured`, `selected`, `dragging` defaults; you can omit them. If the existing map had a `measured` field, pass it through too.
+8. **Edges are auto-generated server-side** from `{{nodeId.field}}` references. Don't compute or pass `studioData.edges[]`.
+
+## Worked example
+
+Three new nodes: `1` (input) → `2` (LLM, uses `{{1.text}}`) → `3` (output, uses `{{2.result}}`). No existing positions.
+
+- Topo: `[1, 2, 3]`. In-degrees: `1→0, 2→1, 3→1`. Out-degrees: `1→1, 2→1, 3→0`. No fans.
+- `cursorY = -296`.
+- Node 1: `cursorY = -96 → y = -96` (rounds to -96, already on grid).
+- Node 2: `cursorY = 104 → y = 104`.
+- Node 3: `cursorY = 304 → y = 304`.
+
+```json
+"studioData": {
+  "nodes": [
+    { "id": "1", "type": "mainNodeType", "position": { "x": 400, "y": -96 } },
+    { "id": "2", "type": "mainNodeType", "position": { "x": 400, "y": 104 } },
+    { "id": "3", "type": "mainNodeType", "position": { "x": 400, "y": 304 } }
+  ]
+}
+```
+
+Now extend it — user adds a 4th node `4` that fan-ins from `2` AND `3` (uses `{{2.x}}` and `{{3.y}}`). Existing positions for `1, 2, 3` came back from the local file unchanged. Topo continues `[1, 2, 3, 4]`. In-degree of `4` is 2 → FAN_EXTRA applies.
+
+- Walk `1` → carry through `y=-96`, `cursorY = -96`.
+- Walk `2` → carry through `y=104`, `cursorY = 104`.
+- Walk `3` → carry through `y=304`, `cursorY = 304`.
+- Walk `4` (new) → `cursorY = 504` (+200) → +80 fan-in → `584` → round → `y = 592` (16-snap; 584 rounds to 592 by `Math.round`).
+
+Existing nodes' positions: untouched.
+
+## Edge cases
+
+- **Cycles** — the dep graph shouldn't have any. If your topo-sort detects one, bail with an error message to the user; do not deploy.
+- **No-dep "input" node** with high `nodeId` — topo puts it first because nothing depends on it... wait, no — it has in-degree 0 but other nodes may *not* depend on it. If multiple roots exist, sort them by `nodeId` ascending. The user can drag them later.
+- **Existing position with `x ≠ 400`** — keep it as-is. The user picked it deliberately.
+- **Missing `measured`** — omit; server defaults to width 320 / height 124. If you have it from the local file, pass it through.
+
+## When this kicks in
+
+Every `workflow_create` and every `workflow_update`. Always emit `studioData.nodes[].position` — never let the server's fallback positioner run.
+
+Universal Workers, code nodes, memories, collections, webhooks, schedules: **out of scope**. Workers have a canonical 2-node shape that the server lays out fine on its own; the rest aren't on the canvas.
 
 ---
 

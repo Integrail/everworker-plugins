@@ -5,6 +5,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.10.0] — Unreleased
+
+### Added — canvas-friendly node layout
+
+- **PLAYBOOK.md § NODE LAYOUT** — new section. Every `workflow_create` /
+  `workflow_update` now emits `studioData.nodes[].position` explicitly. The
+  server's array-iteration-index fallback positioner is bypassed.
+- **Layout algorithm.** Topological order from `{{nodeId.field}}` dependencies,
+  single column (`x = 400`), `BASE_SPACING = 200`, extra `+80px` of gap before
+  fan-in and after fan-out nodes, final `y` snapped to the canvas's 16-pixel
+  grid. Tie-break by ascending `nodeId` for deterministic output.
+- **Preservation rule.** On every update, positions already in the local
+  `<slug>.json`'s `studioData.nodes[]` (sourced from the canvas via the drift
+  flow) are carried through verbatim. The skill only computes positions for
+  brand-new nodeIds. **Canvas-side drags are never overwritten.**
+- **Drift handling carve-out.** The Update flow's drift check now silently
+  resyncs the local file when the only remote difference is inside
+  `studioData.nodes[].position` / `.measured`. Position-only drift is benign;
+  any other body difference still stops and prompts.
+- `build` and `develop` skills point at the new section.
+
+### Why
+- The server fallback laid nodes out by array order, not execution order, so
+  workflows looked scrambled in the canvas. Users would drag every node into
+  place — then the next CC update would re-scramble them because the skill
+  didn't preserve positions.
+
+### Non-breaking
+- Server `generateStudioData` is unchanged; it still preserves whatever the
+  caller passes (`helpers.ts:185`).
+- No new MCP tool, no contract bump, no feature flag — the wire shape was
+  always accepted; the playbook just teaches the skill to use it.
+
 ## [0.9.0] — Unreleased
 
 ### Added — Webhooks + Schedules

@@ -14,7 +14,7 @@ Run the **full Plan → Develop → Test cycle** as specified in the playbook:
 2. Research only what you'll use: providers, node types, custom nodes, existing workflows, memories/collections.
 3. Render the plan inline following the PLAYBOOK's **Design & Present** structure: Problem → Approach → Dependencies → Workflow shape (one-line arrow diagram using `→`, **no mermaid**) → Node breakdown table → Possible follow-ups (optional) → Open questions (only if blocking).
 4. **Wait for explicit user approval.** A clarification answer is not approval.
-5. After approval, follow the workflow-as-code discipline: Write the JSON to `./everworker-workflows/<slug>.json`, then `mcp__ai_builder__workflow_create`, then write the sidecar.
+5. After approval, follow the workflow-as-code discipline: Write the JSON to `./everworker-workflows/<slug>.json`, then `mcp__ai_builder__workflow_create`, then write the sidecar. **Always include `studioData.nodes[].position` — see PLAYBOOK § NODE LAYOUT.** Topo-ordered placement for new workflows; carry existing positions verbatim on updates so canvas-side drags are never overwritten.
 6. **Apply the solution tag (if any) to every taggable entity created or modified — see PLAYBOOK § SOLUTION TAGS.** When opening an existing on-disk entity, read its sidecar `solutionTag` and reuse it.
 7. Ask permission to test, then execute, poll, debug. Cap at 3 cycles.
 8. Render a final report inline with a clickable canvas link.
