@@ -68,4 +68,30 @@ if [ -n "$REQUIRED_FEATURES" ]; then
     fi
 fi
 
+# Write a runtime info file the skill / playbook can read at session start.
+# `${user_config.X}` is not substituted inside skill markdown; this is the only
+# reliable way for the LLM to know the real configured URL (otherwise it
+# hallucinates plausible URLs into sidecars and final-report links).
+if [ -n "$PLUGIN_ROOT" ]; then
+    RUNTIME_DIR="$PLUGIN_ROOT/runtime"
+    if mkdir -p "$RUNTIME_DIR" 2>/dev/null; then
+        # Build JSON manually to avoid needing jq for the write path. URL is
+        # already trimmed of trailing slash above. No JWT — secrets never leak
+        # into a file the LLM reads.
+        WRITTEN_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        FEATURES_JSON=$(echo "$RESPONSE" | jq -c '.data.supportedFeatures // []' 2>/dev/null || echo '[]')
+        cat > "$RUNTIME_DIR/runtime.json" <<EOF
+{
+  "everworkerUrl": "$URL",
+  "serverContract": "${SERVER_CONTRACT:-unknown}",
+  "supportedFeatures": $FEATURES_JSON,
+  "pluginVersion": "$PLUGIN_VERSION",
+  "writtenAt": "$WRITTEN_AT"
+}
+EOF
+    else
+        echo "[ai-builder] WARN: cannot write to $RUNTIME_DIR — final-report URLs may be incorrect." >&2
+    fi
+fi
+
 exit 0

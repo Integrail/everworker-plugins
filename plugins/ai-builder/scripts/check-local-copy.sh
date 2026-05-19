@@ -57,6 +57,20 @@ mtime_secs() {
     fi
 }
 
+# Enforce that workflowJson.studioData.nodes[] carries a {x,y} position for
+# every nodeId in workflowJson.nodes[]. Called after the byte-equivalence check,
+# so we know LOCAL_CANON == DEPLOY_CANON and either can be used.
+require_full_layout() {
+    local wj="$1"
+    local node_ids
+    node_ids=$(echo "$wj" | jq -r '[.nodes[].nodeId | tostring] | sort | unique | .[]' 2>/dev/null || echo "")
+    local studio_ids
+    studio_ids=$(echo "$wj" | jq -r '[.studioData.nodes[]? | select(.position.x != null and .position.y != null) | .id | tostring] | sort | unique | .[]' 2>/dev/null || echo "")
+    if [ "$node_ids" != "$studio_ids" ]; then
+        block "workflowJson.studioData.nodes[] must include a {x,y} position for every nodeId in workflowJson.nodes[]. Compute layout per PLAYBOOK § NODE LAYOUT (topological order, x=400, base spacing 200, fan-extra 80, snap to 16, preserve existing positions verbatim on updates) and write the result into the local file before retrying."
+    fi
+}
+
 # Convert ISO-8601 to epoch seconds (best effort: GNU date, then BSD date).
 iso_to_epoch() {
     local iso="$1"
@@ -98,6 +112,7 @@ case "$TOOL_NAME" in
         if [ "$LOCAL_CANON" != "$DEPLOY_CANON" ]; then
             block "Local file '$FILE' contents differ from the workflowJson being deployed. Re-Write the file with the exact JSON you intend to deploy (use canonical JSON), then retry."
         fi
+        require_full_layout "$DEPLOY_CANON"
         allow
         ;;
 
@@ -145,6 +160,7 @@ case "$TOOL_NAME" in
         if [ "$LOCAL_CANON" != "$DEPLOY_CANON" ]; then
             block "Local file '$FILE' contents differ from the workflowJson being deployed. Edit the file to the exact JSON you intend to deploy, then retry workflow_update."
         fi
+        require_full_layout "$DEPLOY_CANON"
         allow
         ;;
 

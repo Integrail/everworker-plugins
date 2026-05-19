@@ -14,9 +14,30 @@ You have MCP tools (the `mcp__ai_builder__*` family) to discover node types and 
 
 **Provider connection state is not a blocker.** `isConnected: false` is normal for API-key providers and does not prevent the workflow from being designed, persisted, or executed against a configured key. Don't gate planning on it.
 
-The user's Everworker instance URL is available as `${user_config.everworker_url}`. Use it whenever you render a canvas link.
-
 **Per-project credentials.** `everworker_url` and `everworker_jwt` resolve from the project's `.claude/settings.json` when set there, so different project directories can point at different Everworker instances. If the user asks how to use the plugin against another instance — answer: drop a `.claude/settings.json` with the project-local values, no plugin reinstall needed. One instance per CC session — no in-session swap.
+
+---
+
+# RUNTIME INFO (read this once at session start)
+
+Claude Code does **not** substitute `${user_config.everworker_url}` inside playbook or skill markdown — that template only works in `plugin.json`. To get the real configured URL, **read `${CLAUDE_PLUGIN_ROOT}/runtime/runtime.json`** at the start of any session that will write a sidecar, render a final-report link, or otherwise emit the user's instance URL. The SessionStart hook writes it. Shape:
+
+```json
+{
+  "everworkerUrl": "https://your.instance.example.com",
+  "serverContract": "0.8.0",
+  "supportedFeatures": ["worker_tags", "..."],
+  "pluginVersion": "0.10.0",
+  "writtenAt": "2026-..."
+}
+```
+
+**Use the file's `everworkerUrl` verbatim** wherever the playbook or any SKILL.md shows `${user_config.everworker_url}` — those tokens are *placeholders the LLM must substitute manually*, not template substitutions Claude Code will do for you. Examples:
+
+- Sidecar `everworkerUrl` field → the value from the file.
+- Canvas / editor / chat links in final reports → prefix with the value from the file.
+
+If the file is missing (hook failed, or first session before the hook ran), ask the user for the URL in one short clarification, then proceed. **Never hallucinate a URL** — `https://app.everworker.ai`, `https://everworker.ai`, the user's domain inferred from anything else, all forbidden. The URL must come from the file or from the user.
 
 ---
 
@@ -65,16 +86,16 @@ Every workflow you create or modify lives on disk before it lives on the server.
 - `<slug>` is a kebab-case derivative of the workflow name, unique within the directory. Reuse the same slug across deploys for one workflow.
 
 ## Create flow
-1. Draft the full `workflowJson` object.
+1. Draft the full `workflowJson` object — including `studioData.nodes[]` with a `{x,y}` position for **every** node and `studioData.edges[]` derived from `{{nodeId.field}}` references. **See § NODE LAYOUT for the algorithm — this is enforced by the PreToolUse hook; deploys without complete positions are blocked.**
 2. `Write` it to `./everworker-workflows/<slug>.json`.
 3. Call `mcp__ai_builder__workflow_create` with the JSON contents you just wrote (use `Read` if needed to confirm bytes).
-4. On success, `Write` the sidecar `./everworker-workflows/<slug>.meta.json` with the returned `workflowId`, an ISO timestamp, the SHA-256 hex hash of the JSON file's contents (compute via `Bash: shasum -a 256 <file> | awk '{print $1}'`), and `${user_config.everworker_url}`.
+4. On success, `Write` the sidecar `./everworker-workflows/<slug>.meta.json` with the returned `workflowId`, an ISO timestamp, the SHA-256 hex hash of the JSON file's contents (compute via `Bash: shasum -a 256 <file> | awk '{print $1}'`), and the `everworkerUrl` value read from `${CLAUDE_PLUGIN_ROOT}/runtime/runtime.json` (see § RUNTIME INFO).
 
 ## Update flow
 1. `mcp__ai_builder__workflow_read` for the current remote state.
 2. If the local file is missing, `Write` it from the remote response and write the sidecar with `lastDeployedHash` matching the just-written file. (This is the "first-time-clone" path.)
 3. **Drift check**: hash the freshly read remote and compare against the sidecar's `lastDeployedHash`. If they differ, the remote was edited out-of-band (canvas, another developer). Compare the local and remote bodies side by side — if the **only** differences are inside `studioData.nodes[i].position` or `studioData.nodes[i].measured` (the user dragged nodes around in the canvas), this is **position-only drift**: silently update the local file's `studioData` from the remote and re-hash, no prompt. Any other body difference (node parameters, deps, names, descriptions, edges semantics, agentConfig, tags, …) is real drift — stop, surface it to the user as a markdown summary, and ask which side wins before doing anything destructive.
-4. `Edit` the local file with the change.
+4. `Edit` the local file with the change. **For every node you add, append a matching entry to `studioData.nodes[]` with its computed `{x,y}` per § NODE LAYOUT. For every node you remove, remove its `studioData.nodes[]` entry. Never modify the `position` of a node that already had one — those positions came from the canvas and are sacred.** The PreToolUse hook blocks updates whose `studioData.nodes[]` doesn't cover every node id.
 5. Call `mcp__ai_builder__workflow_update` with the file's contents.
 6. On success, update the sidecar (`lastDeployedAt`, new `lastDeployedHash`).
 

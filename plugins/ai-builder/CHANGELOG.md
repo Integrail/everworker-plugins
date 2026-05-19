@@ -5,6 +5,68 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.10.2] — Unreleased
+
+### Fixed — node layout was being skipped by fresh sessions
+
+- 0.10.0 added a § NODE LAYOUT section to the playbook, but the visible
+  Create / Update flow steps still said only "draft the workflowJson" — so
+  the LLM drafted the JSON without `studioData`, the server's fallback
+  positioner kicked in (array-index column, 150px spacing), and workflows
+  landed on the canvas in arbitrary order regardless.
+- **PreToolUse hook** (`check-local-copy.sh`) now structurally enforces the
+  rule: `workflow_create` and `workflow_update` are **blocked** when
+  `workflowJson.studioData.nodes[]` doesn't carry a `{x,y}` position for
+  every nodeId in `workflowJson.nodes[]`. Same shape as the existing local-
+  copy + drift checks — the LLM gets an immediate block reason pointing at
+  § NODE LAYOUT.
+- **PLAYBOOK § Create flow / Update flow** rewritten to put studioData
+  front-and-centre on step 1 / step 4 respectively, with an explicit
+  "existing positions are sacred" rule on update.
+
+### Why
+- A fresh session created a workflow that landed in the DB with the server-
+  fallback positions (y = -96, 54, 204; 150px gap) — exact evidence the LLM
+  was ignoring the new layout rules. Burying enforcement in a section the
+  LLM may not re-read in every session isn't reliable; the hook makes the
+  rule structural.
+
+### Non-breaking
+- Workflows that already pass studioData are unaffected.
+- Existing local files without studioData will now fail their next deploy
+  attempt with a clear, actionable block reason — same pattern as the
+  byte-equivalence and drift checks.
+
+## [0.10.1] — Unreleased
+
+### Fixed — URL hallucination in sidecars and final-report links
+
+- **`${user_config.X}` is not substituted inside skill / playbook markdown.**
+  Only `plugin.json` template substitution is supported by Claude Code. The
+  LLM was reading the literal token `${user_config.everworker_url}` and
+  fabricating a plausible value (typically `https://app.everworker.ai`),
+  poisoning every `.meta.json` sidecar and every canvas link in final
+  reports.
+- **SessionStart hook now writes `${CLAUDE_PLUGIN_ROOT}/runtime/runtime.json`**
+  containing the configured `everworkerUrl`, plus the server's reported
+  contract / supported features / plugin version. No JWT (no secrets land in
+  a file the LLM reads).
+- **PLAYBOOK.md gained a § RUNTIME INFO** section instructing the skill to
+  read `runtime/runtime.json` at session start and use its `everworkerUrl`
+  verbatim wherever the playbook or any skill shows the
+  `${user_config.everworker_url}` placeholder. Explicit "never hallucinate a
+  URL" rule.
+
+### Why
+- A user pointed at a non-default Everworker URL noticed `everworkerUrl` in a
+  fresh sidecar was wrong. Root cause: skill markdown templates aren't
+  evaluated; the LLM had no actual access path to the configured URL.
+
+### Non-breaking
+- Existing skills keep using the `${user_config.everworker_url}` placeholder
+  syntax in their final-report instructions — the playbook now teaches the
+  LLM to substitute it from `runtime.json`. No skill rewrites needed.
+
 ## [0.10.0] — Unreleased
 
 ### Added — canvas-friendly node layout
