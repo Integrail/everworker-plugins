@@ -5,6 +5,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.10.3] — Unreleased
+
+### Fixed — workflow_create / workflow_update silently dropped studioData
+
+- The `workflowJson` parameter schemas for both tools declared
+  `{ name, description, tags, nodes, agentConfig }` but **not `studioData`**.
+  The MCP framework's input validator strips fields not in the schema, so
+  even when the LLM passed positions per § NODE LAYOUT, they never reached
+  `execute()`. The server's `generateStudioData` fell back to the
+  array-index column placement every time.
+- Added a full `studioData` subschema to both tools — array of
+  `{ id, type?, position: {x,y}, measured? }`. The LLM's positions now
+  survive validation and are preserved verbatim by the server's existing
+  preservation path in `helpers.ts:185-192`.
+
+### Why
+- Direct DB inspection of workflows created via the plugin showed
+  y = -96, 54, 204 (server fallback, 150px spacing) even when the tool call
+  payload visibly contained y = -96, 104, 304 (200px from the layout
+  algorithm). Schema-level field stripping was the silent culprit.
+
+### Non-breaking
+- `studioData` was already optional in the TypeScript types and the
+  preservation logic — only the JSON Schema was lying. Workflows that never
+  passed studioData continue to work via the server fallback unchanged.
+
 ## [0.10.2] — Unreleased
 
 ### Fixed — node layout was being skipped by fresh sessions

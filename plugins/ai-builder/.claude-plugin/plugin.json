@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
     "name": "ai-builder",
-    "version": "0.10.2",
+    "version": "0.10.3",
     "x-everworker": {
         "minServerContract": "0.8.0",
         "requiredFeatures": ["worker_tags", "workflow_tags"]
