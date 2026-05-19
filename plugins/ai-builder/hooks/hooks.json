@@ -1,0 +1,25 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/health-check.sh"
+                    }
+                ]
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "mcp__ai_builder__workflow_create|mcp__ai_builder__workflow_update|mcp__ai_builder__worker_create|mcp__ai_builder__worker_update|mcp__ai_builder__custom_node_create|mcp__ai_builder__custom_node_update",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-local-copy.sh"
+                    }
+                ]
+            }
+        ]
+    }
+}

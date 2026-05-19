@@ -1,0 +1,42 @@
+{
+    "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+    "name": "ai-builder",
+    "version": "0.9.0",
+    "x-everworker": {
+        "minServerContract": "0.8.0",
+        "requiredFeatures": ["worker_tags", "workflow_tags"]
+    },
+    "description": "Plan, develop, and test Everworker AI Builder artifacts — workflows, Universal Workers, code nodes, memories, and collections — from Claude Code.",
+    "author": {
+        "name": "Everworker"
+    },
+    "homepage": "https://everworker.ai",
+    "repository": "https://github.com/Integrail/everworker-plugins",
+    "license": "UNLICENSED",
+    "keywords": ["everworker", "ai-builder", "workflows", "code-nodes", "memory", "collections", "agents"],
+    "userConfig": {
+        "everworker_url": {
+            "type": "string",
+            "title": "Everworker base URL",
+            "description": "Base URL of the Everworker instance the plugin should target (no trailing slash). Example: https://app.everworker.ai or http://localhost:3000.",
+            "default": "http://localhost:3000",
+            "required": true
+        },
+        "everworker_jwt": {
+            "type": "string",
+            "title": "Everworker JWT token",
+            "description": "Personal JWT issued by an Everworker admin. Must include the workflow-builder scope. Stored in the OS keychain.",
+            "sensitive": true,
+            "required": true
+        }
+    },
+    "mcpServers": {
+        "ai_builder": {
+            "type": "http",
+            "url": "${user_config.everworker_url}/mcp/workflow-builder",
+            "headers": {
+                "Authorization": "Bearer ${user_config.everworker_jwt}"
+            }
+        }
+    }
+}

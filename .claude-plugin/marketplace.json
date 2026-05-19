@@ -1,0 +1,14 @@
+{
+    "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+    "name": "everworker",
+    "description": "Everworker plugins for Claude Code",
+    "owner": { "name": "Everworker" },
+    "plugins": [
+        {
+            "name": "ai-builder",
+            "description": "Plan, develop, and test Everworker AI Builder artifacts — workflows, Universal Workers, code nodes, memories, and collections — from Claude Code.",
+            "source": "./plugins/ai-builder",
+            "version": "0.9.0"
+        }
+    ]
+}
