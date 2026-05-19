@@ -1,2 +1,5 @@
 .DS_Store
 node_modules/
+
+# Runtime artifacts written by scripts/health-check.sh on every SessionStart.
+runtime/

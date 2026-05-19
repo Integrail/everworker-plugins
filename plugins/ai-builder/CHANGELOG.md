@@ -5,6 +5,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.10.4] — Unreleased
+
+### Fixed — runtime URL now injected directly into LLM context
+
+- 0.10.1 wrote runtime values to `${CLAUDE_PLUGIN_ROOT}/runtime/runtime.json`
+  and told the LLM to `Read` that file. But `${CLAUDE_PLUGIN_ROOT}` is NOT
+  substituted in skill markdown either (same gotcha as `${user_config.X}`),
+  so the LLM had to hunt for the file across plausible install paths —
+  fragile and slow.
+- **SessionStart hook now emits the runtime values as `additionalContext`**
+  via the SessionStart hook JSON output protocol. Claude Code injects that
+  text directly into the LLM's system context for the whole session.
+  The LLM sees an `[ai-builder runtime]` block listing `everworker_url`,
+  server contract, plugin version, and supported features — no file
+  lookup needed.
+- `runtime.json` is still written under the plugin root as a defensive
+  fallback (gitignored), but the primary delivery channel is the injected
+  context.
+- **PLAYBOOK § RUNTIME INFO** rewritten — points at the injected context
+  block instead of the file.
+
+### Why
+- A CC session reported having to grep for the runtime file across
+  multiple plausible paths before finding it under the dev checkout. The
+  hook-output channel makes the URL available structurally with no path
+  guessing.
+
+### Non-breaking
+- The fallback file is still written, so older skill instructions that read
+  it still work.
+
 ## [0.10.3] — Unreleased
 
 ### Fixed — workflow_create / workflow_update silently dropped studioData

@@ -18,26 +18,23 @@ You have MCP tools (the `mcp__ai_builder__*` family) to discover node types and 
 
 ---
 
-# RUNTIME INFO (read this once at session start)
+# RUNTIME INFO (it is already in your system context)
 
-Claude Code does **not** substitute `${user_config.everworker_url}` inside playbook or skill markdown — that template only works in `plugin.json`. To get the real configured URL, **read `${CLAUDE_PLUGIN_ROOT}/runtime/runtime.json`** at the start of any session that will write a sidecar, render a final-report link, or otherwise emit the user's instance URL. The SessionStart hook writes it. Shape:
+Claude Code does **not** substitute `${user_config.everworker_url}` or `${CLAUDE_PLUGIN_ROOT}` inside playbook or skill markdown — those templates only work in `plugin.json`. To get the real configured URL, the SessionStart hook injects an `[ai-builder runtime]` block directly into your system context at session start, containing:
 
-```json
-{
-  "everworkerUrl": "https://your.instance.example.com",
-  "serverContract": "0.8.0",
-  "supportedFeatures": ["worker_tags", "..."],
-  "pluginVersion": "0.10.0",
-  "writtenAt": "2026-..."
-}
-```
+- `everworker_url` — the user's configured Everworker URL.
+- `server contract version` — the MCP contract version the server reports.
+- `plugin version` — the running plugin version.
+- `server supported features` — comma-separated feature flags from the server.
 
-**Use the file's `everworkerUrl` verbatim** wherever the playbook or any SKILL.md shows `${user_config.everworker_url}` — those tokens are *placeholders the LLM must substitute manually*, not template substitutions Claude Code will do for you. Examples:
+**Look for the `[ai-builder runtime]` block in your context now.** Use its `everworker_url` verbatim wherever the playbook or any SKILL.md shows `${user_config.everworker_url}` — those tokens are *placeholders to substitute*, not template substitutions Claude Code will do for you. Examples:
 
-- Sidecar `everworkerUrl` field → the value from the file.
-- Canvas / editor / chat links in final reports → prefix with the value from the file.
+- Sidecar `everworkerUrl` field → the value from the runtime block.
+- Canvas / editor / chat links in final reports → prefix with that value.
 
-If the file is missing (hook failed, or first session before the hook ran), ask the user for the URL in one short clarification, then proceed. **Never hallucinate a URL** — `https://app.everworker.ai`, `https://everworker.ai`, the user's domain inferred from anything else, all forbidden. The URL must come from the file or from the user.
+If the `[ai-builder runtime]` block isn't in your context (hook failed silently — e.g. server unreachable, JWT missing), ask the user for the URL in one short clarification, then proceed. A defensive-fallback file is also written at `<plugin-root>/runtime/runtime.json` but its path varies by install — you generally won't need it.
+
+**Never hallucinate a URL** — `https://app.everworker.ai`, `https://everworker.ai`, the user's domain inferred from anything else, all forbidden. The URL must come from the runtime block or from the user.
 
 ---
 

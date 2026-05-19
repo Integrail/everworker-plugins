@@ -68,16 +68,34 @@ if [ -n "$REQUIRED_FEATURES" ]; then
     fi
 fi
 
-# Write a runtime info file the skill / playbook can read at session start.
-# `${user_config.X}` is not substituted inside skill markdown; this is the only
-# reliable way for the LLM to know the real configured URL (otherwise it
-# hallucinates plausible URLs into sidecars and final-report links).
+# Inject runtime values directly into the LLM's session context via the
+# SessionStart hook's `additionalContext` channel. Neither `${user_config.X}`
+# nor `${CLAUDE_PLUGIN_ROOT}` is substituted inside skill / playbook markdown,
+# so the only reliable way for the LLM to know the configured URL (and avoid
+# hallucinating it into sidecars / final-report links) is to put it directly
+# in the system context. No JWT is included — secrets never leak into LLM
+# context.
+FEATURES_LIST="${SERVER_FEATURES:-}"
+ADDITIONAL_CONTEXT=$(printf '%s\n' \
+    "[ai-builder runtime]" \
+    "The configured Everworker instance for this session:" \
+    "- everworker_url: $URL" \
+    "- server contract version: ${SERVER_CONTRACT:-unknown}" \
+    "- plugin version: $PLUGIN_VERSION" \
+    "- server supported features: ${FEATURES_LIST:-(none reported)}" \
+    "" \
+    "Use the everworker_url above verbatim wherever the playbook or any SKILL.md shows the placeholder \${user_config.everworker_url} — that token is NOT substituted by Claude Code in markdown; substitute it yourself with the value above. Sidecar everworkerUrl fields and canvas / editor / chat links in final reports all use this URL. Never hallucinate a URL.")
+
+jq -n --arg ctx "$ADDITIONAL_CONTEXT" \
+    '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
+
+# Also write a defensive-fallback runtime.json under the plugin root in case
+# the LLM ever needs to re-read these values mid-session. The path is not
+# stable across installs (depends on where Claude Code clones the plugin), so
+# the primary delivery channel is the additionalContext above.
 if [ -n "$PLUGIN_ROOT" ]; then
     RUNTIME_DIR="$PLUGIN_ROOT/runtime"
     if mkdir -p "$RUNTIME_DIR" 2>/dev/null; then
-        # Build JSON manually to avoid needing jq for the write path. URL is
-        # already trimmed of trailing slash above. No JWT — secrets never leak
-        # into a file the LLM reads.
         WRITTEN_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         FEATURES_JSON=$(echo "$RESPONSE" | jq -c '.data.supportedFeatures // []' 2>/dev/null || echo '[]')
         cat > "$RUNTIME_DIR/runtime.json" <<EOF
@@ -89,8 +107,6 @@ if [ -n "$PLUGIN_ROOT" ]; then
   "writtenAt": "$WRITTEN_AT"
 }
 EOF
-    else
-        echo "[ai-builder] WARN: cannot write to $RUNTIME_DIR — final-report URLs may be incorrect." >&2
     fi
 fi
 
