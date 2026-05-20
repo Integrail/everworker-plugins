@@ -484,7 +484,16 @@ When your work is complete (after Develop, or after Test if testing was performe
   - LLM Nodes: `{{2.result.content}}`
   - API Nodes: `{{3.result}}`, `{{3.result.data}}`, `{{3.status}}`
   - Worker Nodes: `{{5.result}}`, `{{5.result.output}}`
+  - Custom (code) Nodes: `{{N.result.field}}` — the object the code assigns to `output` is wrapped under `.result`. So if the node sets `output = { companies: [...] }`, the workflow reference is `{{N.result.companies}}`, **not** `{{N.companies}}`.
 - **Best practices**: Use explicit paths (`{{2.result.content}}` not `{{2.content}}`). Verify node has completed before referencing.
+
+### Strict template resolution (gotcha)
+Template references are resolved **eagerly and strictly** at runtime. If `{{N.result.field}}` resolves to a missing key on node N's output, the whole execution fails — there is no implicit `null` fallback.
+
+Defensive workflow design:
+- For every key you reference, make sure the producing node emits it on **every** code path (success and error). For Custom Nodes, set the key to `null` in error branches rather than omitting it.
+- Prefer narrow references (`{{N.result.summary}}`) over deep ones (`{{N.result.data.items[0].name}}`) when intermediate keys may be absent.
+- If a downstream node needs branching based on whether a value is present, put a Custom Node between them to normalise the shape.
 
 ### What Templating Does NOT Support
 The template engine is plain string substitution — NOT a programming language.

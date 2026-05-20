@@ -5,6 +5,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.11.0] — Unreleased
+
+### Added — feedback-driven guideline & MCP polish
+
+Round of fixes from a long real-world build. Plugin / MCP scope only — engine
+code (validator, VM sandbox, template resolver, providers store) untouched.
+
+- **Custom-node guidelines rewritten**:
+  - Validator caveats section documents the regex false positives so the LLM
+    avoids names like `obj.path`, `osVersion`, `process_data`. Errors are
+    non-fatal — iterate by reading `validationErrors`.
+  - Explicit **NOT available** section lists `URL`, `URLSearchParams`,
+    `fs`/`path`/`os`/`child_process`, `require`/`import`, `process`/`global`,
+    `eval`/`Function`, timers, web crypto, WebSocket — so the LLM doesn't
+    emit code that won't compile.
+  - **Building URLs without `URL()`** snippet — manual querystring assembly
+    with `encodeURIComponent`.
+  - Auth section reworded so `getToken` is the right answer for non-Bearer
+    APIs (X-API-Key, X-KEY, apikey, query-string keys), not a footnote.
+  - **`.result` wrapping** documented — `output = { companies: [...] }` is
+    referenced as `{{N.result.companies}}` from a workflow.
+  - **Strict template resolution** documented — missing keys throw, always
+    emit documented keys (use `null` in error paths).
+- **Secret-leak parity** — `custom_node_execute` and `workflow_execute` now
+  share a token-shape detector (`findTokenShapedValue` in `toolHelpers.ts`)
+  that scans inputs for OpenAI `sk-`, Slack `xox?-`, GitHub `gh?_`, AWS
+  `AKIA`, Google `ya29.`, JWTs, and `Bearer …` patterns. Both tools refuse
+  with a clear message pointing the LLM at provider configuration instead.
+- **`providers_list.isConnected` now meaningful for service-auth providers**
+  — previously only OAuth providers could report `true`. The flag is now
+  derived per auth mode: OAuth uses the existing user-token check; app-token
+  / service-auth checks the named token secret (with fallback to "any
+  non-empty secret"); hybrid is true if either channel is configured. The
+  tool description spells out the semantics.
+- **PLAYBOOK § Parameter Templating** — adds a Custom Nodes bullet for
+  `.result` wrapping and a "Strict template resolution" subsection.
+- **workflow_create / workflow_update descriptions** — call out the strict
+  template eval caveat so the LLM only references keys that are guaranteed
+  to be present.
+
+### Why
+- Real-world build session surfaced multiple papercuts: validator false
+  positives on `obj.path.x`, undocumented `.result` wrapping that broke a
+  first workflow run, `URL` not in the sandbox, `isConnected: false` for
+  API-key connectors that worked fine, and asymmetric secret-leak
+  protection between the two `_execute` tools.
+
 ## [0.10.4] — Unreleased
 
 ### Fixed — runtime URL now injected directly into LLM context
