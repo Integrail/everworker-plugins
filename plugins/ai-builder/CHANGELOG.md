@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.14.0] — Unreleased
+
+### Fixed — `workflow_execution_status` no longer sleeps server-side
+
+Removed the `delaySeconds` parameter from `workflow_execution_status`. The tool now returns immediately. When the workflow is still running, the response includes `nextPollAfterMs: 5000` as a hint — the LLM polls in a client-side loop (`Bash sleep 5`) instead of holding the MCP connection open. This eliminates the hang the planner used to hit when picking a long delay (60–90s) that exceeded the MCP tool-call timeout. The PLAYBOOK and the `test` / `build-worker` skills now spell out the loop pattern with a 30-iteration cap, 3-strikes transient-error retry, and a defensive fall back to a fixed 5s wait if `nextPollAfterMs` is absent / null / non-numeric.
+
 ## [0.13.0] — Unreleased
 
 ### Fixed — webhook targets are Workflows, not Universal Workers

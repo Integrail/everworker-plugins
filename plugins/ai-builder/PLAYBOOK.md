@@ -440,7 +440,13 @@ Before executing any workflow, **ask the user for permission**. Include what you
 1. **Read first**: `mcp__ai_builder__workflow_read` to confirm structure and inputs.
 2. **Prepare inputParams**: If the workflow has an `input_node`, prepare a JSON string whose keys match the input_node's parameter names.
 3. **Execute**: `mcp__ai_builder__workflow_execute` with `workflowId` and `inputParams`.
-4. **Check**: `mcp__ai_builder__workflow_execution_status` with `delaySeconds` (1–3s for simple workflows, 5–20s for complex ones; max 60s).
+4. **Poll for the result.** `workflow_execution_status` returns immediately. While the execution is running, the response *should* include `nextPollAfterMs: 5000`. Loop:
+   - Echo the `executionId` to the user once, before the first poll — it's the only handle for resuming later if the loop exits early.
+   - **Decide the next wait from `status`, not from `nextPollAfterMs`.** Always sleep **5 seconds** between polls (use the `Bash` tool: `sleep 5`). If `nextPollAfterMs` is present and is a positive number, you may use it — but treat it as a hint, not a contract: a missing field, `null`, `0`, or anything non-numeric means *use the 5s default*. Never trust the value blindly (e.g. never sleep > 30s based on it).
+   - Sleep client-side; do **not** sleep inside the MCP call.
+   - Stop when `status` is `completed` or `failed`. Drop into the per-node debug flow for failures.
+   - **Cap at 30 iterations (~2.5 minutes total).** If still `running` after the cap, report current state + the canvas link + the `executionId` and stop testing; do not silently mark failed.
+   - **Transient poll error** (network blip, MCP transport error, tool returns `success: false` with a non-business error): retry the same poll up to **3 consecutive times** with the same 5s gap. On the 4th consecutive failure, abort the loop and tell the user the executionId so they can resume by re-running `/ai-builder:test` with it once the connection is back.
 5. **Debug failures**: Pass `nodeId` to inspect individual node results. Start at the failed node and trace back through its dependencies to find the root cause.
 6. **Fix & re-test**: Edit the **local file** first, then `workflow_update` (which re-runs the drift check), then re-execute.
 

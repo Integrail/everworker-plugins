@@ -8,7 +8,7 @@
             "name": "ai-builder",
             "description": "Plan, develop, and test Everworker AI Builder artifacts — workflows, Universal Workers, code nodes, memories, and collections — from Claude Code.",
             "source": "./plugins/ai-builder",
-            "version": "0.13.0"
+            "version": "0.14.0"
         }
     ]
 }

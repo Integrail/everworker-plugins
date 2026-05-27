@@ -13,7 +13,7 @@ Run **Test only**:
 1. Use `mcp__ai_builder__workflow_search` (or `worker_search` for Universal Workers) to resolve the target if the user gave a name; otherwise use the provided ID.
 2. `mcp__ai_builder__workflow_read` to confirm the structure and prepare `inputParams`.
 3. Ask the user for permission to execute (one approval covers all retries within this task).
-4. `mcp__ai_builder__workflow_execute` → `workflow_execution_status` (with `delaySeconds` 1–60s).
+4. `mcp__ai_builder__workflow_execute` to start the run, then poll `mcp__ai_builder__workflow_execution_status` in a short loop. Echo the `executionId` to the user once before the first poll. Sleep **5 seconds** between polls using the `Bash` tool (`sleep 5`); the MCP tool itself returns immediately and *should* include `nextPollAfterMs: 5000` while running — treat it as a hint, not a contract, and fall back to 5s if it's missing, null, zero, or non-numeric. Stop at `completed` / `failed`. **Cap at 30 iterations (~2.5min).** On a transient poll error, retry the same call up to 3 consecutive times; on the 4th consecutive error, abort and tell the user the executionId so they can resume later.
 5. On failure, drill into individual nodes via `nodeId`, debug, fix the **local file** first if a code change is needed, then `workflow_update`, then re-test.
 6. Cap at 3 test → debug → fix cycles. After that, report current state and stop.
 7. Render results inline as a status table with a clickable canvas link.
