@@ -5,7 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
-## [0.12.0] — Unreleased
+## [0.13.0] — Unreleased
+
+### Fixed — webhook targets are Workflows, not Universal Workers
+
+The webhook tool descriptions and the `webhook-build` skill incorrectly said webhooks fan out to Universal Workers. They actually target **Workflows** — Universal Workers expect a chat-style userMessage/session and are not valid webhook targets. The underlying field is legacy-named `workerIds`, but every ID it holds must reference a Workflow. The plugin doc, the PLAYBOOK's WEBHOOKS section, and the `webhook-build` skill now state this correctly so the LLM stops looking for the wrong entity (and stops telling users to wrap workflows in workers).
 
 ### Added — plugin/MCP permissions aligned with Everworker web interface
 

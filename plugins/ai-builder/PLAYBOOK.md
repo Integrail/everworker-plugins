@@ -1051,13 +1051,15 @@ Two existing workflow nodes do the heavy lifting:
 
 # WEBHOOKS (Inbound HTTP Triggers)
 
-A **Webhook** is an inbound HTTP endpoint that fans out to one or more Universal Workers when called. Use when an external system (Slack Events API, GitHub, Stripe, a custom client) needs to trigger Everworker.
+A **Webhook** is an inbound HTTP endpoint that fans out to one or more **Workflows** when called. Use when an external system (Slack Events API, GitHub, Stripe, a custom client) needs to trigger Everworker.
+
+Webhooks target **Workflows**, NOT Universal Workers. Universal Workers expect a chat-style userMessage/session and are not valid webhook targets. The stored field is legacy-named `workerIds`, but every ID it holds must reference a Workflow.
 
 ## When to reach for a Webhook
 
 - An external system needs to push events into Everworker.
 - The trigger is event-driven (not time-driven — that's a Schedule).
-- The user wants a single URL that fan-outs to multiple workers in parallel.
+- The user wants a single URL that fan-outs to multiple Workflows in parallel.
 
 ## Tool flow
 
@@ -1078,8 +1080,8 @@ A **Webhook** is an inbound HTTP endpoint that fans out to one or more Universal
 
 ## Execution mode
 
-- `sync`: wait for every targeted worker to finish, return results in the HTTP response. Use when the caller needs the result immediately.
-- `async`: queue the workers and return execution IDs immediately. Use when the caller has a short timeout (Slack ≤ 3s) or workers are slow.
+- `sync`: wait for every targeted Workflow to finish, return results in the HTTP response. Use when the caller needs the result immediately.
+- `async`: queue the Workflows and return execution IDs immediately. Use when the caller has a short timeout (Slack ≤ 3s) or Workflows are slow.
 
 ## Secret handling (REQUIRED)
 
@@ -1092,8 +1094,8 @@ The signing secret is returned **exactly once** by `webhook_create` and once aga
 
 ## Anti-patterns
 
-- **Wiring a webhook to a Workflow directly.** Webhooks fan out to *Universal Workers* (`workerIds`), not Workflows. If you need a workflow on a webhook, wrap it in a thin worker.
-- **Putting secrets in inputParams.** Secrets belong in the auth header; the worker reads the request body as input.
+- **Wiring a webhook to a Universal Worker.** Webhooks fan out to *Workflows* (the `workerIds` field is legacy-named), not Universal Workers. If you want a chat-style worker on the receiving end, wrap it behind a Workflow that calls into the worker.
+- **Putting secrets in inputParams.** Secrets belong in the auth header; the Workflow reads the request body as input.
 - **Storing the secret in a sidecar.** It can't be re-read anyway. If lost, rotate.
 
 ---
