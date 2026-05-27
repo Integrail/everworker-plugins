@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.15.0] — Unreleased
+
+### Added — Google web search hint
+
+Surfaced the `rapidapi.websearch` provider in both the `providers_list` tool description and the PLAYBOOK's Integration section. The plugin will now tell the LLM, the moment it inspects available providers, that this is the provider to reach for whenever a workflow needs Google-style search results (or current/news content past the LLM's cutoff). Includes the `standard_api_call` parameters (url + path + GET + URL-encoded `q`) and notes that Universal Workers should prefer the built-in `web_search` tool, which wraps the same provider.
+
 ## [0.14.0] — Unreleased
 
 ### Fixed — `workflow_execution_status` no longer sleeps server-side

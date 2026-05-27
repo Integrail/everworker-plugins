@@ -620,6 +620,8 @@ Optional. Only add when there are genuinely configurable parameters that change 
 ### standard_api_call — External API Calls
 Parameters: `url`, `method` (GET/POST/PUT/PATCH/DELETE), `headers`, `body`, `retries`, `retryDelayMs`. Use `providers_list` to find available API providers; research unfamiliar APIs with `WebSearch` / `WebFetch` first.
 
+**Google-style web search.** If a workflow needs Google search results (news, current facts, anything past the LLM's knowledge cutoff), look for the **`rapidapi.websearch`** provider in `providers_list`. Call it via `standard_api_call` with `url: https://real-time-web-search.p.rapidapi.com`, `path: /search`, `method: GET`, query param `q` (URL-encoded — use `+` for spaces, not `%20`). For Universal Workers, the equivalent is the built-in `web_search` tool (`worker_tools_list`) which wraps the same provider — prefer the tool inside workers, the `standard_api_call` inside deterministic workflows.
+
 ### read_url — Web Content Extraction
 Parameters: `url`, `fallbackToBrowser`, `returnPandoc`, `parseTableData`.
 
