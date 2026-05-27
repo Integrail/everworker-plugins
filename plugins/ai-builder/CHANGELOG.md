@@ -5,6 +5,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Versioning convention.** The plugin version follows the MCP **contract version** advertised by the Everworker server at `/api/v1/agents/health` → `data.pluginContract`. The plugin's `plugin.json` declares `x-everworker.minServerContract` — the SessionStart hook warns if the server is older than that. When a breaking contract change ships, the previous-contract plugin is republished as a parallel channel (`ai-builder-v0.7@everworker`, etc.) so users on stale self-hosted servers can stay on a matching plugin.
 
+## [0.12.0] — Unreleased
+
+### Added — plugin/MCP permissions aligned with Everworker web interface
+
+Plugin/MCP scope only — engine code untouched.
+
+- **`current_user_get_capabilities` (new MCP tool)** — returns the operator's role and a capability matrix (`createWorkflows`, `createWorkers`, `createSchedules`, `createCustomNodes`, `manageWebhooks`, `executeWorkflows`, `readCatalogues`). Called first in the Plan phase so the planner can warn the user about role-limited steps before designing, instead of failing mid-execution.
+- **Role-aware tool gates** — every workflow-builder write tool now mirrors the Everworker web interface's `allowedRoles` route guard:
+  - Webhooks (search, read, create, update, delete, regenerate secret) → **Admin**.
+  - Workflows, Universal Workers, Schedules, Custom Nodes (search / read / create / update / delete / execute / toggle / run_now) → **Builder**.
+  - Read-only catalogue tools (`schema_get_*`, `providers_list`, `worker_tools_list`) and `workflow_execute` / `workflow_execution_status` are unchanged — they match the web interface's any-authenticated-user surfaces.
+- **PLAYBOOK Permissions section** — documents the new rule and the capability cheat sheet.
+- **Connect Claude Code modal** — shows the operator's current role and a role-aware caveat under the security notice, so the user knows what their token can and can't do before pasting it into Claude Code.
+
+### Why
+
+Without this, an `mcp:workflow-builder` JWT scope let a User-role token call tools that mutate resources the same user could never reach in the web interface (e.g. webhook creation, which the interface gates to Admin). The plugin now refuses those calls server-side and the planner stops drafting them in the first place.
+
 ## [0.11.0] — Unreleased
 
 ### Added — feedback-driven guideline & MCP polish

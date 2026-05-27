@@ -16,6 +16,7 @@ Run **Plan only**. Approach this as a solution architect, not a feature spec wri
 
 Process:
 
+- **First, call `mcp__ai_builder__current_user_get_capabilities`.** Inspect the returned `can` matrix. If the natural plan requires a capability set to `false` for this user, say so plainly at the top of the plan — name the role required, propose a reduced-scope alternative they can ship today, and ask whether to proceed knowing certain steps will fail. Do not silently design around a missing capability.
 - Call `mcp__ai_builder__providers_list` and `mcp__ai_builder__schema_get_nodes` only when you'll use them — never guess provider IDs or node `methodId`s.
 - Call `mcp__ai_builder__workflow_search` and `mcp__ai_builder__custom_node_search` to find reusable parts. If the workflow will use RAG or a typed data store, also `mcp__ai_builder__memory_search` / `mcp__ai_builder__collection_search` — flag any missing data store as a prerequisite that `/ai-builder:data-build` should set up first.
 - Render the plan inline as markdown, following the PLAYBOOK's **Design & Present** structure: Problem → Approach → Dependencies → Workflow shape (one-line arrow diagram using `→`, no mermaid) → Node breakdown table → **Solution tag** (if the plan produces more than one taggable entity, propose a `solution:<slug>` per § SOLUTION TAGS) → Possible follow-ups (optional) → Open questions (only if a real ambiguity blocks the build).

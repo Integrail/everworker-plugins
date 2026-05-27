@@ -52,6 +52,29 @@ The session-start warning is not fatal — the plugin still loads, MCP tools sti
 
 ---
 
+# PERMISSIONS
+
+Every tool call respects the operator's Everworker role. The plugin enforces the same permissions as the Everworker web interface — it cannot grant the user more than they can do there.
+
+**Plan phase — start here.** In any build or automation skill, call `current_user_get_capabilities` as the first tool. It returns the user's top role and a capability matrix. If the planned solution requires a capability that is `false` for this user:
+
+1. Tell the user the exact role required and what they could do with their current role.
+2. Offer a reduced-scope alternative they can ship today, or ask whether to proceed knowing certain steps will fail.
+3. Do not silently design around the gap.
+
+If a tool returns the runtime error `"This action requires the X role in Everworker"`, surface it verbatim — the plugin cannot work around it; the user needs an administrator to upgrade their role.
+
+**Capability cheat sheet** (defaults, subject to organisation policy):
+
+| Capability | Required role |
+|---|---|
+| Read catalogues (nodes, providers, tool list) | any |
+| Execute existing workflows / workers | any |
+| Create / update / delete workflows, workers, schedules, custom nodes | Builder |
+| Manage webhooks (create / update / delete / rotate secret) | Admin |
+
+---
+
 # HOW YOU WORK
 
 You have three core capabilities: **Plan**, **Develop**, and **Test**. Adapt to what the user asks — use all three, or just the ones needed:
